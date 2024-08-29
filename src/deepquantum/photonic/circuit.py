@@ -17,7 +17,7 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 from .decompose import UnitaryDecomposer
 from .draw import DrawCircuit
 from .gate import PhaseShift, BeamSplitter, MZI, BeamSplitterTheta, BeamSplitterPhi, BeamSplitterSingle, UAnyGate
-from .gate import Squeezing, Squeezing2, Displacement, DisplacementPosition, DisplacementMomentum
+from .gate import Squeezing, Squeezing2, Displacement, DisplacementPosition, DisplacementMomentum, Delay
 from .hafnian_ import hafnian
 from .operation import Operation, Gate
 from .qmath import fock_combinations, permanent, product_factorial, sort_dict_fock_basis, sub_matrix
@@ -1583,3 +1583,22 @@ class QumodeCircuit(Operation):
         f = PhaseShift(inputs=theta, nmode=self.nmode, wires=wires, cutoff=self.cutoff, requires_grad=False,
                        noise=self.noise, mu=mu, sigma=sigma)
         self.add(f, encode=False)
+
+    def delay(
+        self,
+        wires: int,
+        inputs: Any = None,
+        encode: bool = False,
+        mu: Optional[float] = None,
+        sigma: Optional[float] = None
+    ) -> None:
+        """Add a rotation gate."""
+        requires_grad = False
+        if inputs is not None:
+            requires_grad = False
+        if mu is None:
+            mu = self.mu
+        if sigma is None:
+            sigma = self.sigma
+        delay = Delay(inputs=inputs, nmode=self.nmode, wires=wires, cutoff=self.cutoff)
+        self.add(delay, encode=encode)

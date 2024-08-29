@@ -1490,3 +1490,143 @@ class DisplacementMomentum(Displacement):
         self.register_buffer('theta', theta)
         self.update_matrix()
         self.update_transform_xp()
+
+class Delay(SingleGate):
+    r"""Delay loop.
+
+    **Symplectic Transformation:**
+
+    .. math::
+        D^\dagger(r, \theta)
+        \begin{pmatrix}
+            \hat{x} \\
+            \hat{p} \\
+        \end{pmatrix}
+        D(r, \theta) =
+        \begin{pmatrix}
+            \hat{x} \\
+            \hat{p} \\
+        \end{pmatrix} + \frac{\sqrt{\hbar}}{\kappa}
+        \begin{pmatrix}
+            r\cos\theta \\
+            r\sin\theta \\
+        \end{pmatrix}
+
+    Args:
+        inputs (Any, optional): The parameters of the delay loop, including [N, bs_theta, r_theta]. Default: ``None``
+        nmode (int, optional): The number of modes that the quantum operation acts on. Default: 1
+        wires (int, List[int] or None, optional): The indices of the modes that the quantum operation acts on.
+            Default: ``None``
+        cutoff (int or None, optional): The Fock space truncation. Default: ``None``
+        requires_grad (bool, optional): Whether the parameters are ``nn.Parameter`` or ``buffer``.
+            Default: ``False`` (which means ``buffer``)
+        noise (bool, optional): Whether to introduce Gaussian noise. Default: ``False``
+        mu (float, optional): The mean of Gaussian noise. Default: 0
+        sigma (float, optional): The standard deviation of Gaussian noise. Default: 0.1
+    """
+    def __init__(
+        self,
+        inputs: Any = None,
+        nmode: int = 1,
+        wires: Union[int, List[int], None] = None,
+        cutoff: Optional[int] = None,
+        requires_grad: bool = False,
+        noise: bool = False,
+        mu: float = 0,
+        sigma: float = 0.1
+    ) -> None:
+        super().__init__(name='Delay', inputs=inputs, nmode=nmode, wires=wires, cutoff=cutoff,
+                         requires_grad=requires_grad, noise=noise, mu=mu, sigma=sigma)
+        self.npara = 3
+        self.init_para(inputs)
+
+    def inputs_to_tensor(self, inputs: Any = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Convert inputs to torch.Tensor."""
+        # if inputs is None:
+        #     r = torch.rand(1)[0]
+        #     theta = torch.rand(1)[0] * 2 * torch.pi
+        # else:
+        #     r = inputs[0]
+        #     theta = inputs[1]
+        if not isinstance(inputs, torch.Tensor):
+            inputs = torch.tensor(inputs, dtype=torch.float)
+        # if self.noise:
+        #     r, theta = self._add_noise(r, theta)
+        return inputs
+
+    # def _add_noise(self, r: torch.Tensor, theta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """Add Gaussian noise to the parameters."""
+    #     r = r + torch.normal(self.mu, self.sigma, size=(1, )).squeeze()
+    #     theta = theta + torch.normal(self.mu, self.sigma, size=(1, )).squeeze()
+    #     return r, theta
+
+    # def get_matrix(self, r: Any, theta: Any) -> torch.Tensor:
+    #     """Get the local unitary matrix acting on annihilation and creation operators."""
+    #     r, theta = self.inputs_to_tensor([r, theta])
+    #     return torch.eye(2, dtype=r.dtype, device=r.device) + 0j
+
+    # def update_matrix(self) -> torch.Tensor:
+    #     """Update the local unitary matrix acting on annihilation and creation operators."""
+    #     matrix = self.get_matrix(self.r, self.theta)
+    #     self.matrix = matrix.detach()
+    #     return matrix
+
+    # def get_matrix_state(self, r: Any, theta: Any) -> torch.Tensor:
+    #     """Get the local transformation matrix acting on Fock state tensors.
+
+    #     See https://arxiv.org/pdf/2004.11002.pdf Eq.(57) and Eq.(58)
+    #     """
+    #     r, theta = self.inputs_to_tensor([r, theta])
+    #     sqrt = torch.sqrt(torch.arange(self.cutoff, dtype=r.dtype, device=r.device))
+    #     alpha = r * torch.exp(1j * theta)
+    #     alpha_c = r * torch.exp(-1j * theta)
+    #     tran_mat = alpha.new_zeros([self.cutoff] * 2)
+    #     tran_mat[0, 0] = torch.exp(-(r ** 2) / 2)
+    #     # rank 1
+    #     for m in range(self.cutoff - 1):
+    #         tran_mat[m + 1, 0] = alpha / sqrt[m + 1] * tran_mat[m, 0].clone()
+    #     # rank 2
+    #     for m in range(self.cutoff):
+    #         for n in range(self.cutoff - 1):
+    #             tran_mat[m, n + 1] = (
+    #                 - alpha_c / sqrt[n + 1] * tran_mat[m, n].clone()
+    #                 + sqrt[m] / sqrt[n + 1] * tran_mat[m - 1, n].clone()
+    #             )
+    #     return tran_mat
+
+    # def update_matrix_state(self) -> torch.Tensor:
+    #     """Update the local transformation matrix acting on Fock state tensors."""
+    #     return self.get_matrix_state(self.r, self.theta)
+
+    # def get_transform_xp(self, r: Any, theta: Any) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """Get the local affine symplectic transformation acting on quadrature operators in ``xxpp`` order."""
+    #     r, theta = self.inputs_to_tensor([r, theta])
+    #     cos = torch.cos(theta)
+    #     sin = torch.sin(theta)
+    #     matrix_xp = torch.eye(2, dtype=r.dtype, device=r.device)
+    #     vector_xp = torch.stack([r * cos, r * sin]).reshape(2, 1) * dqp.hbar ** 0.5 / dqp.kappa
+    #     return matrix_xp, vector_xp
+
+    # def update_transform_xp(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    #     """Update the local affine symplectic transformation acting on quadrature operators in ``xxpp`` order."""
+    #     matrix_xp, vector_xp = self.get_transform_xp(self.r, self.theta)
+    #     self.matrix_xp = matrix_xp.detach()
+    #     self.vector_xp = vector_xp.detach()
+    #     return matrix_xp, vector_xp
+
+    def init_para(self, inputs: Any = None) -> None:
+        """Initialize the parameters."""
+        noise = self.noise
+        self.noise = False
+        inputs = self.inputs_to_tensor(inputs)
+        self.noise = noise
+        # if self.requires_grad:
+        #     self.r = nn.Parameter(r)
+        #     self.theta = nn.Parameter(theta)
+        # else:
+        self.register_buffer('inputs', inputs)
+        # self.update_matrix()
+        # self.update_transform_xp()
+
+    def extra_repr(self) -> str:
+        return f'wires={self.wires}, inputs={self.inputs.detach()}'
