@@ -37,13 +37,56 @@ from thewalrus.quantum.conversions import Amat, Xmat
 # The time taken for each process is recorded and saved in ".npy" file.
 
 def generate_symm_matrix(n):
+    np.random.seed(41)
     A = np.random.rand(n, n)
     A = (A + A.T) / 2
     return A
 def generate_psd_matrix(n):
+    np.random.seed(42)
+    n = n //2 # (2*n, 2*n) -> (n, n)
     cov = random_covariance(n)
     O = Xmat(n) @ Amat(cov)
-    return O.real # (2*n, 2*n)
+    return O.real
+
+def benchmark_haf(mat_size, repeat, loop):
+    T_dq = [ ]
+    for k in range(repeat):
+        t = []
+        for i in list(range(2, mat_size+1))[::2]:
+            a = generate_symm_matrix(i)
+            batch_a1 = torch.tensor(np.array([a] * batch), device=device)
+            t1 = time.time()
+            dq_haf = torch.vmap(dqp.hafnian, in_dims=(0, None))(batch_a1, loop)
+            t2 = time.time()
+            print('deepquantum', 'repeat:', k, 'size:', int(i), end='\r')
+            t.append(t2-t1)
+        T_dq.append(t)
+    print('deepquantum', torch.tensor(T_dq))
+    np.save(f"dq_batch_{batch}_size_{mat_size}_loop_{loop}_{device}_haf.npy", torch.tensor(T_dq))
+    return T_dq
+
+def benchmark_tor(mat_size, repeat, loop):
+    T_dq = [ ]
+    for k in range(repeat):
+        t = []
+        for i in list(range(2, mat_size+1))[::2]:
+            a = generate_psd_matrix(i)
+            batch_a1 = torch.tensor(np.array([a] * batch), device=device)
+            gamma = torch.diagonal(batch_a1, dim1=1, dim2=2)
+            if loop:
+                t1 = time.time()
+                dq_tor = torch.vmap(dqp.torontonian, in_dims=(0, 0))(batch_a1, gamma)
+                t2 = time.time()
+            else:
+                t1 = time.time()
+                dq_tor = torch.vmap(dqp.torontonian)(batch_a1)
+                t2 = time.time()
+            print('deepquantum', 'repeat:', k, 'size:', int(i), end='\r')
+            t.append(t2-t1)
+        T_dq.append(t)
+    print('deepquantum', torch.tensor(T_dq))
+    np.save(f"dq_batch_{batch}_size_{mat_size}_loop_{loop}_{device}_tor.npy", torch.tensor(T_dq))
+    return T_dq
 
 
 if __name__ == '__main__':
@@ -73,42 +116,13 @@ if __name__ == '__main__':
     if haf_size is not None:
         print("run hafnian calcluation......")
         assert haf_size%2 == 0
-        T_dq = [ ]
-        for k in range(repeat):
-            t = []
-            for i in list(range(2, haf_size+1))[::2]:
-                a = generate_symm_matrix(i)
-                batch_a1 = torch.tensor(np.array([a] * batch), device=device)
-                t1 = time.time()
-                dq_haf = torch.vmap(dqp.hafnian, in_dims=(0, None))(batch_a1, haf_loop)
-                t2 = time.time()
-                print('deepquantum', 'repeat:', k, 'size:', int(i), end='\r')
-                t.append(t2-t1)
-            T_dq.append(t)
-        print('deepquantum', torch.tensor(T_dq))
-        np.save(f"dq_batch_{batch}_size_{haf_size}_loop_{haf_loop}_{device}_haf.npy", torch.tensor(T_dq))
-
+        T_dq = benchmark_haf(haf_size, repeat, haf_loop)
 
     # torontonian
     if tor_size is not None:
         print("run torontonian calcluation......")
         assert tor_size%2 == 0
-        T_dq = [ ]
-        for k in range(repeat):
-            t = []
-            for i in list(range(2, tor_size+1))[::2]:
-                a = generate_psd_matrix(i//2)
-                batch_a1 = torch.tensor(np.array([a] * batch), device=device)
-                gamma = torch.diagonal(batch_a1, dim1=1, dim2=2)
-                t1 = time.time()
-                dq_tor = torch.vmap(dqp.torontonian, in_dims=(0, 0))(batch_a1, gamma)
-                t2 = time.time()
-                print('deepquantum', 'repeat:', k, 'size:', int(i), end='\r')
-                t.append(t2-t1)
-            T_dq.append(t)
-        print('deepquantum', torch.tensor(T_dq))
-        np.save(f"dq_batch_{batch}_size_{tor_size}__loop_{tor_loop}_{device}_tor.npy", torch.tensor(T_dq))
-
+        T_dq = benchmark_tor(tor_size, repeat, tor_loop)
 
 
 
