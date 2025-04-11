@@ -15,25 +15,7 @@ import numpy as np
 # - den_mat: Whether to use density matrix representation. Default: ``False``
 # The time taken for each sampling is recorded and saved in ".npy" file.
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Fock homodyne sampling')
-    parser.add_argument('--shots_list', type=float, nargs='+',
-                    help='List of shots, e.g., 100 500 1000 5000 10000')
-    parser.add_argument('--batch', type=int, default=1)
-    parser.add_argument('--repeat', type=int, default=1)
-    parser.add_argument('--den_mat', type=bool, default=False)
-    args = parser.parse_args()
-    shots_list = args.shots_list
-    repeat = args.repeat
-    batch = args.batch
-    den_mat = args.den_mat
-    print('the sample shots is ', shots_list)
-    print('the batch is ', batch)
-    print('the repeat times is ', repeat)
-    print('the den_mat is ', den_mat)
-
-    if shots_list is None:
-        shots_list = [1e2, 5e2, 1e3, 5e3, 1e4, 2e4, 3e4, 4e4, 5e4]
+def benchmark_fock_homodyne(shots_list, repeat, batch, den_mat):
     T_dq = [ ]
     for k in range(repeat):
         t = []
@@ -42,16 +24,38 @@ if __name__ == '__main__':
             cir.bs([0,1], inputs=[np.pi/3, np.pi/3])
             cir.bs([1,2], inputs=[np.pi/3, np.pi/3])
             data = torch.tensor([[0, 0]] * batch)
-            test = cir(data=data)
             t1 = time.time()
+            cir(data=data)
             samples = cir.measure_homodyne(wires=[1], shots=int(i))
             t2 = time.time()
             print('dq', 'repeat:', k, 'shots:', int(i), end='\r')
             t.append(t2-t1)
         T_dq.append(t)
-
     np.save("dq_batch_%d_fock_homodyne.npy"%batch, torch.tensor(T_dq))
     print('DQ', torch.tensor(T_dq))
+    return T_dq
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Fock homodyne sampling')
+    parser.add_argument('--shots_list', type=float, nargs='+',
+                        help='List of shots, e.g., 100 500 1000 5000 10000',
+                        default=None)
+    parser.add_argument('--batch', type=int, default=1)
+    parser.add_argument('--repeat', type=int, default=1)
+    parser.add_argument('--den_mat', type=bool, default=False)
+    args = parser.parse_args()
+    shots_list = args.shots_list
+    repeat = args.repeat
+    batch = args.batch
+    den_mat = args.den_mat
+    if shots_list is None:
+        shots_list = [1e2, 5e2, 1e3, 5e3, 1e4, 2e4, 3e4, 4e4, 5e4]
+    print('the sample shots is ', shots_list)
+    print('the batch is ', batch)
+    print('the repeat times is ', repeat)
+    print('the den_mat is ', den_mat)
+    T_dq = benchmark_fock_homodyne(shots_list, repeat, batch, den_mat)
 
 
 

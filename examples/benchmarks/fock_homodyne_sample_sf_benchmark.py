@@ -17,22 +17,7 @@ import numpy as np
 # - repeat: Number of times to repeat the sampling process. Default: 1
 # The time taken for each sampling is recorded and saved in ".npy" file.
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Fock homodyne sampling')
-    parser.add_argument('--shots_list', type=float, nargs='+',
-                    help='List of shots, e.g., 100 500 1000 5000 10000')
-    parser.add_argument('--batch', type=int, default=1)
-    parser.add_argument('--repeat', type=int, default=1)
-    args = parser.parse_args()
-    shots_list = args.shots_list
-    batch = args.batch
-    repeat = args.repeat
-    print('the sample shots is ', shots_list)
-    print('the batch is ', batch)
-    print('the repeat times is ', repeat)
-
-    if shots_list is None:
-        shots_list = [1e2, 5e2, 1e3, 5e3, 1e4, 2e4, 3e4, 4e4, 5e4]
+def benchmark_fock_homodyne(shots_list, repeat, batch):
     T_sf_batch = [ ]
     for _ in range(batch):
         T_sf = [ ]
@@ -58,9 +43,29 @@ if __name__ == '__main__':
                 t_sf.append(t2-t1)
             T_sf.append(t_sf)
         T_sf_batch.append(torch.tensor(T_sf))
-
     np.save("sf_batch_%d_fock_homodyne.npy"%batch, torch.stack(T_sf_batch)) # (batch, repeat, len(shots_list))
     print('SF', torch.stack(T_sf_batch))
+    return T_sf_batch
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Fock homodyne sampling')
+    parser.add_argument('--shots_list', type=float, nargs='+',
+                        help='List of shots, e.g., 100 500 1000 5000 10000',
+                        default=None)
+    parser.add_argument('--batch', type=int, default=1)
+    parser.add_argument('--repeat', type=int, default=1)
+    args = parser.parse_args()
+    shots_list = args.shots_list
+    batch = args.batch
+    repeat = args.repeat
+    if shots_list is None:
+        shots_list = [1e2, 5e2, 1e3, 5e3, 1e4, 2e4, 3e4, 4e4, 5e4]
+    print('the sample shots is ', shots_list)
+    print('the batch is ', batch)
+    print('the repeat times is ', repeat)
+    T_sf_batch = benchmark_fock_homodyne(shots_list, repeat, batch)
+
 
 
 
