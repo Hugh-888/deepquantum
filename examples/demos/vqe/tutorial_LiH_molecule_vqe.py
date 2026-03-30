@@ -29,7 +29,7 @@
 #
 # $$\psi_6 =  \sum_n \lambda_n{U\psi_3^n\otimes V \psi_3^n}$$
 #
-# 这里 $U$ 与 $V$ 表示两条不同的量子电路 Ansatz。为了降低参数量，也可以先取 $U=V$。
+# 这里 $U$ 与 $V$ 表示两个不同的量子电路 Ansatz。为了降低参数量，也可以先取 $U=V$。
 #
 # ### 2) 哈密顿量分解与期望值重构
 # 2. 把 LiH 的哈密顿量写成 Pauli 基矢的线性组合：$H=\sum_k w_k O_k$，其中 $w_k$ 是分解系数。则哈密顿量期望值满足：
@@ -266,11 +266,11 @@ print(u_measure_list_q3_ts.shape, idx_z_list_q3_ts.shape)
 # H = \frac{\sqrt{2}}{2}\begin{pmatrix}
 # 1 & 1\\
 # 1 & -1
-# \end{pmatrix}，
+# \end{pmatrix},
 # S = \frac{\sqrt{2}}{2}\begin{pmatrix}
 # 1 & 1\\
 # 1 & i
-# \end{pmatrix}，
+# \end{pmatrix},
 # SWAP=\begin{pmatrix}
 # 1 & 0 & 0 & 0\\
 # 0 & 0 & 1 & 0 \\
@@ -289,11 +289,11 @@ print(u_measure_list_q3_ts.shape, idx_z_list_q3_ts.shape)
 #
 # 线路初态：$\ket{110}$
 #
-# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{110} + \ket{101})，\psi_{I} = \frac{\sqrt{2}}{2}(\ket{110} + i * \ket{101})$
+# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{110} + \ket{101}),\psi_{I} = \frac{\sqrt{2}}{2}(\ket{110} + i * \ket{101})$
 #
 # $H(2) \ket{110} --> \frac{\sqrt{2}}{2}(\ket{110} + \ket{111})$,
 #
-# $SWAP (1，2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{111})$，
+# $SWAP (1,2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{111})$,
 #
 # $CNOT (1,2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{110})$,
 #
@@ -303,11 +303,11 @@ print(u_measure_list_q3_ts.shape, idx_z_list_q3_ts.shape)
 #
 # 线路初态：$\ket{110}$
 #
-# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{110} + \ket{011})，\psi_{I} = \frac{\sqrt{2}}{2}(\ket{110} + i * \ket{011})$
+# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{110} + \ket{011}),\psi_{I} = \frac{\sqrt{2}}{2}(\ket{110} + i * \ket{011})$
 #
 # $H(2) \ket{110} --> \frac{\sqrt{2}}{2}(\ket{110} + \ket{111})$,
 #
-# $SWAP (1，2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{111})$，
+# $SWAP (1,2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{111})$,
 #
 # $CNOT (1,2) --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{110})$,
 #
@@ -319,11 +319,11 @@ print(u_measure_list_q3_ts.shape, idx_z_list_q3_ts.shape)
 #
 # 线路初态：$\ket{101}$
 #
-# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{101} + \ket{011})，\psi_{I} = \frac{\sqrt{2}}{2}(\ket{101} + i * \ket{011})$
+# $\psi_{R} = \frac{\sqrt{2}}{2}(\ket{101} + \ket{011}),\psi_{I} = \frac{\sqrt{2}}{2}(\ket{101} + i * \ket{011})$
 #
 # $H(1) \ket{101} --> \frac{\sqrt{2}}{2}(\ket{101} + \ket{111})$,
 #
-# $SWAP (0,1) --> \frac{\sqrt{2}}{2}(\ket{011} + \ket{111})$，
+# $SWAP (0,1) --> \frac{\sqrt{2}}{2}(\ket{011} + \ket{111})$,
 #
 # $CNOT (0,1) --> \frac{\sqrt{2}}{2}(\ket{011} + \ket{101})$,
 #
