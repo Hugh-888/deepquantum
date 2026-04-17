@@ -13,6 +13,7 @@ import deepquantum.photonic as dqp
 from ..communication import comm_get_rank, comm_get_world_size
 from ..qmath import is_power, list_to_decimal, multi_kron
 from ..utils import apply_complex_fix
+from .draw import GaussianGraphVisualizer
 from .qmath import cv_to_wigner, dirac_rep, fock_to_wigner, xpxp_to_xxpp, xxpp_to_xpxp
 
 
@@ -249,6 +250,25 @@ class GaussianState(nn.Module):
             normalize: Whether to normalize the Wigner function. Default: ``True``
         """
         return cv_to_wigner([self.cov, self.mean], wire, xrange, prange, npoints, plot, k, normalize)
+
+    def graph(self, k: int = 0, threshold: float = 1e-3, layout: str = 'spring', mode: str = 'simplified'):
+        """Draw Gaussian graph state.
+
+        Args:
+            k: The batch index for covariance matrix.
+            threshold: Cutoff threshold for ignoring extremely small numerical edge weights
+            in the visualization.
+            layout: The layout algorithm (``'spring'``, ``'circular'``,
+                ``'kamada_kawai'``, ``'grid'``, ``'custom'``). Default ``'circular'``
+            mode: The ``'simplified'`` mode for the core structure including node squeezing :math:`Im(Z_{jj})` and
+            edge entanglement :math:`Re(Z_{jk})`. The ``'full'`` mode for all structure including
+            local shear :math:`Re(Z_{jj})` and correlated noise :math:`Im(Z_{jk})`. Default: ``'simplified'``
+        """
+        assert self.is_pure, 'The visualization is valid for Gaussian pure state'
+        cov = 2 * dqp.kappa**2 / dqp.hbar * self.cov[k]
+        graph_visualizer = GaussianGraphVisualizer(cov, threshold, mode)
+        graph_visualizer.draw()
+        return graph_visualizer
 
 
 class BosonicState(nn.Module):
