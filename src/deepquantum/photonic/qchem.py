@@ -5,9 +5,10 @@ fixed-particle electronic-structure problems to bosonic Fock-space representatio
 photonic qumode circuits.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import combinations
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -30,7 +31,7 @@ class FermionToBosonConfig:
         active_indices: Indices of active spatial orbitals.
     """
 
-    geometry: Sequence[Tuple[str, Tuple[float, float, float]]]
+    geometry: Sequence[tuple[str, tuple[float, float, float]]]
     basis: str
     multiplicity: int
     charge: int
@@ -57,17 +58,17 @@ class FermionToBosonMapper:
         occupied_indices: Indices of frozen occupied spatial orbitals.
         active_indices: Indices of active spatial orbitals that define the active space.
     """
+
     def __init__(
         self,
-        geometry: Optional[Sequence[Tuple[str, Tuple[float, float, float]]]] = None,
-        basis: Optional[str] = None,
-        multiplicity: Optional[int] = None,
-        charge: Optional[int] = None,
-        n_electrons: Optional[int] = None,
-        occupied_indices: Optional[Sequence[int]] = None,
-        active_indices: Optional[Sequence[int]] = None
+        geometry: Sequence[tuple[str, tuple[float, float, float]]] | None = None,
+        basis: str | None = None,
+        multiplicity: int | None = None,
+        charge: int | None = None,
+        n_electrons: int | None = None,
+        occupied_indices: Sequence[int] | None = None,
+        active_indices: Sequence[int] | None = None,
     ) -> None:
-
         self.geometry = geometry
         self.basis = basis
         self.multiplicity = multiplicity
@@ -75,6 +76,8 @@ class FermionToBosonMapper:
         self.n_electrons = n_electrons
         self.occupied_indices = occupied_indices
         self.active_indices = active_indices
+        self.n = self.n_electrons - 2 * len(self.occupied_indices)
+        self.m = 2 * len(self.active_indices)
 
         self.config = FermionToBosonConfig(
             geometry=self.geometry,
@@ -85,7 +88,6 @@ class FermionToBosonMapper:
             occupied_indices=self.occupied_indices,
             active_indices=self.active_indices,
         )
-
 
     def construct_h_fermion(self):
         from openfermion import get_fermion_operator
@@ -153,7 +155,7 @@ class FermionToBosonMapper:
         return (new_state, sign)
 
     def matrix_element_one_body(self, bra: tuple, ket: tuple, p: int, q: int):
-        """Calculate the matrix element of a one-body operator: :math:`⟨bra|f^†_p f_q|ket⟩`.
+        r"""Calculate the matrix element of a one-body operator: :math:`⟨bra|f^†_p f_q|ket⟩`.
 
         Args:
             bra: N-particle Slater determinant (bra state).
@@ -187,7 +189,7 @@ class FermionToBosonMapper:
             return 0.0
 
     def matrix_element_two_body(self, bra: tuple, ket: tuple, p: int, q: int, r: int, s: int):
-        """Calculate the matrix element of a two-body operator: :math:`⟨bra|f†_p f†_q f_r f_s|ket⟩`.
+        r"""Calculate the matrix element of a two-body operator: :math:`⟨bra|f†_p f†_q f_r f_s|ket⟩`.
 
         The operators are applied from right to left: :math:`f_s`, then :math:`f_r`,
         then :math:`f†_q`, then :math:`f†_p`.
@@ -287,8 +289,10 @@ class FermionToBosonMapper:
         return h, v, constant
 
     def compute_hamiltonian_matrix(self, fermion_op: 'FermionOperator', n: int, m: int):
-        """Directly compute the Hamiltonian matrix in the n-particle subspace. Notice that 'fermion _op'
-        is normal-ordered and the constant energy is not included in the calculated Hamiltonian.
+        """Directly compute the Hamiltonian matrix in the n-particle subspace.
+
+        Notice that 'fermion _op'is normal-ordered and the constant energy is not included
+        in the calculated Hamiltonian.
 
         Args:
             fermion_op: The input OpenFermion Hamiltonian.
