@@ -60,6 +60,8 @@ dev = [
     'setuptools<82.0.0',
     'strawberryfields',
     'thewalrus',
+    'openfermion',
+    'openfermionpyscf'
 ]
 docs = [
     'myst-nb',

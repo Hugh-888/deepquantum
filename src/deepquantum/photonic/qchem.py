@@ -5,8 +5,9 @@ fixed-particle electronic-structure problems to bosonic Fock-space representatio
 photonic qumode circuits.
 """
 
+from dataclasses import dataclass
 from itertools import combinations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -14,7 +15,31 @@ if TYPE_CHECKING:
     from openfermion import FermionOperator
 
 
-class FermionMapBoson:
+@dataclass(frozen=True)
+class FermionToBosonConfig:
+    """Structured configuration for ``FermionToBosonMapper``.
+
+    Args:
+        geometry: Molecular structure, for example
+            ``[('H', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 0.74))]``.
+        basis: Quantum chemistry basis set such as ``'sto-3g'`` or ``'6-31g'``.
+        multiplicity: Spin multiplicity ``2S + 1``.
+        charge: Net charge of the molecule.
+        n_electrons: Total number of electrons in the full system.
+        occupied_indices: Indices of frozen occupied spatial orbitals.
+        active_indices: Indices of active spatial orbitals.
+    """
+
+    geometry: Sequence[Tuple[str, Tuple[float, float, float]]]
+    basis: str
+    multiplicity: int
+    charge: int
+    n_electrons: int
+    occupied_indices: Sequence[int] = ()
+    active_indices: Sequence[int] = ()
+
+
+class FermionToBosonMapper:
     """A class to map molecular Fermionic Hamiltonians to Bosonic Qumode representations.
 
     This class utilizes OpenFermion and PySCF to perform electronic structure
@@ -23,29 +48,44 @@ class FermionMapBoson:
     It supports Active Space approximations to reduce the simulation dimensionality.
 
     Args:
-        config (dict): A configuration dictionary containing the following keys:
-            'geometry' (list): Molecular structure, e.g., [('H', (0,0,0)), ('H', (0,0,0.74))].
-            'basis' (str): Quantum chemistry basis set (e.g., 'sto-3g', '6-31g').
-            'multiplicity' (int): Spin multiplicity (2S + 1). Usually 1 for closed-shell.
-            'charge' (int): Net charge of the molecule.
-            'n_ele' (int): Total number of electrons in the full system.
-            'n_orbit' (int): Total number of spin-orbitals in the full space.
-            'occupied_indices' (list): Indices of spatial orbitals to be frozen (occupied).
-                                        Electrons in these orbitals do not participate in
-                                        excitations but contribute to the energy constant.
-            'active_indices' (list): Indices of spatial orbitals to be treated as active.
-                                       These form the primary Hilbert space for VQE.
+        geometry: Molecular structure, e.g.
+            ``[('H', (0.0, 0.0, 0.0)), ('H', (0.0, 0.0, 0.74))]``.
+        basis: Quantum chemistry basis set (e.g. ``'sto-3g'``, ``'6-31g'``).
+        multiplicity: Spin multiplicity ``2S + 1``. Usually ``1`` for closed-shell.
+        charge: Net charge of the molecule.
+        n_electrons: Total number of electrons in the full system.
+        occupied_indices: Indices of frozen occupied spatial orbitals.
+        active_indices: Indices of active spatial orbitals that define the active space.
     """
+    def __init__(
+        self,
+        geometry: Optional[Sequence[Tuple[str, Tuple[float, float, float]]]] = None,
+        basis: Optional[str] = None,
+        multiplicity: Optional[int] = None,
+        charge: Optional[int] = None,
+        n_electrons: Optional[int] = None,
+        occupied_indices: Optional[Sequence[int]] = None,
+        active_indices: Optional[Sequence[int]] = None
+    ) -> None:
 
-    def __init__(self, config: dict = None) -> None:
-        self.geometry = config['geometry']
-        self.basis = config['basis']
-        self.multiplicity = config['multiplicity']
-        self.charge = config['charge']
-        self.occupied_indices = config['occupied_indices']
-        self.active_indices = config['active_indices']
-        self.n = config['n_ele'] - 2 * len(self.occupied_indices)
-        self.m = 2 * len(self.active_indices)
+        self.geometry = geometry
+        self.basis = basis
+        self.multiplicity = multiplicity
+        self.charge = charge
+        self.n_electrons = n_electrons
+        self.occupied_indices = occupied_indices
+        self.active_indices = active_indices
+
+        self.config = FermionToBosonConfig(
+            geometry=self.geometry,
+            basis=self.basis,
+            multiplicity=self.multiplicity,
+            charge=self.charge,
+            n_electrons=self.n_electrons,
+            occupied_indices=self.occupied_indices,
+            active_indices=self.active_indices,
+        )
+
 
     def construct_h_fermion(self):
         from openfermion import get_fermion_operator
@@ -68,14 +108,13 @@ class FermionMapBoson:
         return h_matrix
 
     def mapping(self):
-        self.h_fock, self.map_dic = self.get_dms_mapping(self.h_matrix, self.n, self.m)
+        self.h_fock, self.map_dic = self._get_dms_mapping(self.h_matrix, self.n, self.m)
         return self.h_fock
 
     def fci_energy(self):
         return self.molecule.fci_energy
 
-    @staticmethod
-    def apply_annihilation(state: tuple, k: int):
+    def _apply_annihilation(self, state: tuple, k: int):
         """Apply the annihilation operator :math:`f_k` to a Slater determinant.
 
         Args:
@@ -94,8 +133,7 @@ class FermionMapBoson:
 
         return (new_state, sign)
 
-    @staticmethod
-    def apply_creation(state, k):
+    def _apply_creation(self, state, k):
         """Apply the creation operator :math:`f^†_k` to a Slater determinant.
 
         Args:
@@ -122,15 +160,22 @@ class FermionMapBoson:
             ket: N-particle Slater determinant (ket state).
             p: Index of the creation orbital.
             q: Index of the annihilation orbital.
+
+        Returns:
+            A real-valued matrix element. In the occupation-number basis used here,
+            applying :math:`f_p^\dagger f_q` to a Slater determinant can only produce
+            zero or the same basis state up to a fermionic sign, so the nonzero result
+            is always ``+1`` or ``-1``. This implementation therefore returns
+            ``float(sign1 * sign2)`` and does not keep an imaginary component.
         """
         # Step 1: f_q acting on ket
-        result = self.apply_annihilation(ket, q)
+        result = self._apply_annihilation(ket, q)
         if result is None:
             return 0.0
         int1, sign1 = result
 
         # Step 2: f†_p acting on int1
-        result = self.apply_creation(int1, p)
+        result = self._apply_creation(int1, p)
         if result is None:
             return 0.0
         final_state, sign2 = result
@@ -154,27 +199,35 @@ class FermionMapBoson:
             q: Indices for the creation operators.
             r: Indices for the annihilation operators.
             s: Indices for the annihilation operators.
+
+        Returns:
+            A real-valued matrix element. In the occupation-number basis used here,
+            applying :math:`f_p^\dagger f_q^\dagger f_r f_s` to a Slater determinant
+            can only produce zero or the same basis state up to a fermionic sign, so
+            the nonzero result is always ``+1`` or ``-1``. This implementation
+            therefore returns ``float(sign_p * sign_q * sign_r * sign_s)`` and does
+            not keep an imaginary component.
         """
         # Step 1: f_s acting on ket
-        result = self.apply_annihilation(ket, s)
+        result = self._apply_annihilation(ket, s)
         if result is None:
             return 0.0
         int1, sign_s = result
 
         # Step 2: f_r acting on int1
-        result = self.apply_annihilation(int1, r)
+        result = self._apply_annihilation(int1, r)
         if result is None:
             return 0.0
         int2, sign_r = result
 
         # Step 3: f†_q acting on int2
-        result = self.apply_creation(int2, q)
+        result = self._apply_creation(int2, q)
         if result is None:
             return 0.0
         int3, sign_q = result
 
         # Step 4: f†_p acting on int3
-        result = self.apply_creation(int3, p)
+        result = self._apply_creation(int3, p)
         if result is None:
             return 0.0
         final_state, sign_p = result
@@ -185,8 +238,7 @@ class FermionMapBoson:
         else:
             return 0.0
 
-    @staticmethod
-    def extract_integrals(fermion_op: 'FermionOperator'):
+    def _extract_integrals(self, fermion_op: 'FermionOperator'):
         r"""Extract one-body integrals :math:`h[p,q]` and two-body integrals :math:`v[p,q,r,s]` from a FermionOperator.
 
         This helper assumes that ``fermion_op`` is already in normal order, with all creation operators placed before
@@ -235,7 +287,8 @@ class FermionMapBoson:
         return h, v, constant
 
     def compute_hamiltonian_matrix(self, fermion_op: 'FermionOperator', n: int, m: int):
-        """Directly compute the Hamiltonian matrix in the n-particle subspace.
+        """Directly compute the Hamiltonian matrix in the n-particle subspace. Notice that 'fermion _op'
+        is normal-ordered and the constant energy is not included in the calculated Hamiltonian.
 
         Args:
             fermion_op: The input OpenFermion Hamiltonian.
@@ -245,11 +298,11 @@ class FermionMapBoson:
         basis = list(combinations(range(m), n))
         dim = len(basis)
 
-        h_integrals, v_integrals, constant = self.extract_integrals(fermion_op)
+        h_integrals, v_integrals, constant = self._extract_integrals(fermion_op)
 
         h_matrix = np.zeros((dim, dim), dtype=complex)
 
-        # constant term is not added here
+        # constant term is not included here
         # for i in range(dim):
         #     h_matrix[i, i] += constant
 
@@ -278,8 +331,7 @@ class FermionMapBoson:
 
         return h_matrix.real, basis
 
-    @staticmethod
-    def get_dms_mapping(h_f, n, m):
+    def _get_dms_mapping(self, h_f, n, m):
         f_basis = list(combinations(range(m), n))
         mapping = {}
         for i, p in enumerate(f_basis):
