@@ -21,7 +21,7 @@
 
 # %% [markdown]
 # ## 方法概述
-# 这个案例将使用一个三比特光量子电路去求解，原本需要六比特表示的 LiH 分子基态能量。
+# 这个案例将使用一个三比特光量子线路去求解，原本需要六比特表示的 LiH 分子基态能量。
 # 采用的一元编码会把光学模式（qumode）映射到等效的qubit计算空间。下面按步骤展开：
 #
 # ### 1) Schmidt 分解与参数化表示
@@ -29,7 +29,7 @@
 #
 # $$\psi_6 =  \sum_n \lambda_n{U\psi_3^n\otimes V \psi_3^n}$$
 #
-# 这里 $U$ 与 $V$ 表示两个不同的量子电路 Ansatz。为了降低参数量，也可以先取 $U=V$。
+# 这里$\lambda_n$ 为实数， $U$ 与 $V$ 表示两个不同的量子电路 Ansatz。为了降低参数量，也可以先取 $U=V$。
 #
 # ### 2) 哈密顿量分解与期望值重构
 # 2. 把 LiH 的哈密顿量写成 Pauli 基矢的线性组合：$H=\sum_k w_k O_k$，其中 $w_k$ 是分解系数。则哈密顿量期望值满足：
@@ -39,24 +39,24 @@
 # 接着把它切分成两个 3 比特算符 $O_a$ 与 $O_b$，使得 $O_k=O_a\otimes O_b$。
 # 然后分别用 $U\psi_3^n$ 与 $V\psi_3^n$ 计算对应子系统上的算符期望值。
 #
-# $$<O> = <O_a><O_b> = \sum_{nm} \lambda_n \lambda_m <\psi_3^n|U^+O_a U|\psi_3^n><\psi_3^n|V^+O_b V|\psi_3^n>  = \vec{\lambda}^T M \vec{\lambda}$$
+# $$<O> = <O_a \otimes O_b> = \sum_{n,m} \lambda_n^{*} \lambda_m <\psi_3^n|U^+O_a U|\psi_3^m><\psi_3^n|V^+O_b V|\psi_3^m>  = \vec{\lambda}^T M \vec{\lambda}$$
 #
 # 其中
-# $\vec{\lambda}=(\lambda_1, \lambda_2, \lambda_3)， ||\vec{\lambda}||=1$， $M=\begin{pmatrix}
+# $\vec{\lambda}=(\lambda_1, \lambda_2, \lambda_3)^T， ||\vec{\lambda}||=1$， $M=\begin{pmatrix}
 # M_{00} & M_{01} & M_{02}\\
 # M_{10} & M_{11} & M_{12} \\
 # M_{20} & M_{21} & M_{22}
-# \end{pmatrix}$， 其中$M_{ij}=<\psi_3^i|U^+O_a U|\psi_3^j><\psi_3^i|V^+O_b V|\psi_3^j>$。由于哈密顿量是厄米算符，可以得到 $M$ 的厄米性：$M^\dagger = M$（其中 $\dagger$ 表示转置并取共轭）。
+# \end{pmatrix}$， 其中$M_{nm}=<\psi_3^n|U^+O_a U|\psi_3^m><\psi_3^n|V^+O_b V|\psi_3^m>$。由于哈密顿量是厄米算符，可以得到 $M$ 的厄米性：$M^\dagger = M$（其中 $\dagger$ 表示转置并取共轭）。
 #
 # ### 3) 最小特征值与基态能量
 # 3. 把所有算符的期望值按分解系数求和，可得到
 # $M_{sum}=\sum_k w_k M_k$。
 # 于是哈密顿量的期望值可以写成二次型：$\langle H\rangle = \vec{\lambda}^T M_{sum} \vec{\lambda}$。
-# 在约束 $||\vec{\lambda}||=1$ 下，这个二次型的最小值等于矩阵 $M_{sum}$ 的最小特征值；对应的 $\vec{\lambda}$ 就是该特征值的特征向量。因此，最小特征值也对应于哈密顿量的基态能量。
+# 在约束 $||\vec{\lambda}||=1$ 下，这个二次型的最小值等于矩阵 $M_{sum}$ 的最小特征值；对应的 $\vec{\lambda}$ 就是该特征值的特征向量。因此，最小特征值加上常数项能量对应于哈密顿量的基态能量。
 
 # %% [markdown]
 # ## 构建期望值计算线路
-# 首先搭建一个 `Clements` 光量子电路。它采用一元编码将光学模式等效成可计算的量子比特，使得在前向计算中可以得到任意 Pauli 基矢算符的期望值。
+# 为了计算M中的每一个元素，首先搭建一个 `Clements` 光量子电路。它采用一元编码将光学模式等效成可计算的量子比特，使得在前向计算中可以得到任意 Pauli 基矢算符的期望值。
 
 # %%
 import pickle
@@ -266,8 +266,8 @@ print(u_measure_list_q3_ts.shape, idx_z_list_q3_ts.shape)
 # 1 & -1
 # \end{pmatrix},
 # S = \frac{\sqrt{2}}{2}\begin{pmatrix}
-# 1 & 1\\
-# 1 & i
+# 1 & 0\\
+# 0 & i
 # \end{pmatrix},
 # SWAP=\begin{pmatrix}
 # 1 & 0 & 0 & 0\\
@@ -522,8 +522,7 @@ for radius in radius_list:
     loss_all = []
     pauli_coef_ts = torch.tensor(pauli_coef)
     data = nn.Parameter(torch.rand(64) * 2 * torch.pi)
-    lambdas = nn.Parameter(torch.rand(1, 3, dtype=torch.complex128))
-    optimizer = torch.optim.Adam([data, lambdas], lr=2e-2)
+    optimizer = torch.optim.Adam([data], lr=2e-2)
     # print(u_measure_list_q3_ts.shape)
     for epoch in range(150):
         optimizer.zero_grad()
