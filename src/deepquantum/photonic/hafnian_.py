@@ -49,7 +49,9 @@ def get_submat_haf(a: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
     return submat
 
 
-def poly_lambda(submat: torch.Tensor, int_partition: list, power: int, loop: bool = False) -> torch.Tensor:
+def poly_lambda(
+    submat: torch.Tensor, int_partition: list, power: int, loop: bool = False, threshold: float = 1e-30
+) -> torch.Tensor:
     """Get the coefficient of the polynomial.
 
     See https://arxiv.org/abs/1805.12498 Eq.(3.26) (noting that Eq.(3.26) contains a typo) and
@@ -85,7 +87,8 @@ def poly_lambda(submat: torch.Tensor, int_partition: list, power: int, loop: boo
         poly_list = trace_list[orders] / (2 * orders)
         if loop:
             poly_list += diag_term[orders - 1]
-        poly_prod = poly_list.prod()
+        mask = abs(poly_list) > threshold  # numerical stability for gradient
+        poly_prod = (mask * poly_list).prod()
         coeff += ncount / factorial(len(orders)) * poly_prod
     return coeff
 
