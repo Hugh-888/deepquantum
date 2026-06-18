@@ -87,8 +87,7 @@ def poly_lambda(
         poly_list = trace_list[orders] / (2 * orders)
         if loop:
             poly_list += diag_term[orders - 1]
-        mask = abs(poly_list) > threshold  # numerical stability for gradient
-        poly_prod = (mask * poly_list).prod()
+        poly_prod = poly_list.prod()
         coeff += ncount / factorial(len(orders)) * poly_prod
     return coeff
 
@@ -120,7 +119,9 @@ def hafnian(matrix: torch.Tensor, loop: bool = False) -> torch.Tensor:
         z_sets = torch.tensor(powerset[i], device=matrix.device)
         num_z = len(z_sets[0])
         submats = torch.vmap(get_submat_haf, in_dims=(None, 0))(matrix, z_sets)
+        submats = submats.to(torch.cdouble)
         coeff = torch.vmap(poly_lambda, in_dims=(0, None, None, None))(submats, int_partition, power, loop)
+        coeff = coeff.to(matrix.dtype)
         coeff_sum = (-1) ** (power - num_z) * coeff.sum()
         haf += coeff_sum
     return haf
