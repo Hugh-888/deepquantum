@@ -12,7 +12,6 @@ from . import (
     mapper,
     measurement,
     operation,
-    qchem,
     qmath,
     state,
     tdm,

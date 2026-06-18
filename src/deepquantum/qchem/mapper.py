@@ -78,6 +78,10 @@ class FermionToBosonMapper:
         self.active_indices = active_indices
         self.n = self.n_electrons - 2 * len(self.occupied_indices)
         self.m = 2 * len(self.active_indices)
+        if self.n < 0:
+            raise ValueError('The number of active electrons must be non-negative.')
+        if self.m < self.n:
+            raise ValueError('The number of active spin orbitals must be at least the number of active electrons.')
 
         self.config = FermionToBosonConfig(
             geometry=self.geometry,
