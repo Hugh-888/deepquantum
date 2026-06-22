@@ -1168,7 +1168,8 @@ class QumodeCircuit(Operation):
                 sub_mat = sub_gamma
             else:
                 sub_mat[torch.arange(len(sub_gamma)), torch.arange(len(sub_gamma))] = sub_gamma
-            haf = abs(hafnian(sub_mat, loop=loop)) ** 2 if purity else hafnian(sub_mat, loop=loop)
+            temp_haf = hafnian(sub_mat, loop=loop)
+            haf = temp_haf.real.square() + temp_haf.imag.square() if purity else temp_haf
             prob = p_vac * haf / product_factorial(final_state).to(haf.device, haf.dtype)
         elif detector == 'threshold':
             final_state_double = torch.cat([final_state, final_state])
