@@ -140,7 +140,7 @@ class FermionToBosonMapper:
         return (new_state, sign)
 
     def _apply_creation(self, state, k):
-        """Apply the creation operator :math:`f^†_k` to a Slater determinant.
+        """Apply the creation operator :math:`f^\dagger_k` to a Slater determinant.
 
         Args:
             state: An ordered list of occupied orbitals :math:`(p1, ..., pN)` where :math:`p1 < p2 < ... < pN`.
@@ -159,7 +159,7 @@ class FermionToBosonMapper:
         return (new_state, sign)
 
     def matrix_element_one_body(self, bra: tuple, ket: tuple, p: int, q: int):
-        r"""Calculate the matrix element of a one-body operator: :math:`⟨bra|f^†_p f_q|ket⟩`.
+        r"""Calculate the matrix element of a one-body operator: :math:`⟨bra|f^\dagger_p f_q|ket⟩`.
 
         Args:
             bra: N-particle Slater determinant (bra state).
@@ -180,7 +180,7 @@ class FermionToBosonMapper:
             return 0.0
         int1, sign1 = result
 
-        # Step 2: f†_p acting on int1
+        # Step 2: f^\dagger_p acting on int1
         result = self._apply_creation(int1, p)
         if result is None:
             return 0.0
@@ -193,10 +193,10 @@ class FermionToBosonMapper:
             return 0.0
 
     def matrix_element_two_body(self, bra: tuple, ket: tuple, p: int, q: int, r: int, s: int):
-        r"""Calculate the matrix element of a two-body operator: :math:`⟨bra|f†_p f†_q f_r f_s|ket⟩`.
+        r"""Calculate the matrix element of a two-body operator: :math:`⟨bra|f^\dagger_p f^\dagger_q f_r f_s|ket⟩`.
 
         The operators are applied from right to left: :math:`f_s`, then :math:`f_r`,
-        then :math:`f†_q`, then :math:`f†_p`.
+        then :math:`f^\dagger_q`, then :math:`f^\dagger_p`.
 
         Args:
             bra: N-particle Slater determinant (bra state).
@@ -226,13 +226,13 @@ class FermionToBosonMapper:
             return 0.0
         int2, sign_r = result
 
-        # Step 3: f†_q acting on int2
+        # Step 3: f^\dagger_q acting on int2
         result = self._apply_creation(int2, q)
         if result is None:
             return 0.0
         int3, sign_q = result
 
-        # Step 4: f†_p acting on int3
+        # Step 4: f^\dagger_p acting on int3
         result = self._apply_creation(int3, p)
         if result is None:
             return 0.0
@@ -254,8 +254,8 @@ class FermionToBosonMapper:
         constant contractions are handled correctly.
 
         The FermionOperator format handles terms like:
-            FermionOperator(0.5, '0^ 1')       -> 0.5 * f†_0 f_1
-            FermionOperator(0.25, '0^ 1^ 2 3') -> 0.25 * f†_0 f†_1 f_2 f_3
+            FermionOperator(0.5, '0^ 1')       -> 0.5 * f^\dagger_0 f_1
+            FermionOperator(0.25, '0^ 1^ 2 3') -> 0.25 * f^\dagger_0 f^\dagger_1 f_2 f_3
 
         Args:
             fermion_op: The operator object from OpenFermion.
@@ -270,7 +270,7 @@ class FermionToBosonMapper:
                 constant += coeff.real
 
             elif len(term) == 2:
-                # one-body term f†_p f_q
+                # one-body term f^\dagger_p f_q
                 # term = ((p, 1), (q, 0))，1=creation，0=annihilation
 
                 creators = [idx for idx, dag in term if dag == 1]
@@ -281,7 +281,7 @@ class FermionToBosonMapper:
                     h[(p, q)] = h.get((p, q), 0.0) + coeff.real
 
             elif len(term) == 4:
-                # two-body term f†_p f†_q f_r f_s
+                # two-body term f^\dagger_p f^\dagger_q f_r f_s
                 creators = [idx for idx, dag in term if dag == 1]
                 annihilators = [idx for idx, dag in term if dag == 0]
 
