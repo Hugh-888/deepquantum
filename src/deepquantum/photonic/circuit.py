@@ -2819,10 +2819,20 @@ class QumodeCircuit(Operation):
         requires_grad = not encode
         if inputs is not None:
             requires_grad = False
-            if not isinstance(inputs, torch.Tensor):
-                inputs = torch.tensor(inputs, dtype=torch.float)
-            theta = torch.arccos(inputs**0.5) * 2
-        loss = PhotonLoss(inputs=theta, nmode=self.nmode, wires=wires, cutoff=self.cutoff, requires_grad=requires_grad)
+            if isinstance(inputs, torch.Tensor) and inputs.requires_grad and inputs.is_leaf:
+                warnings.warn(
+                    'loss_t() does not optimize leaf transmittance inputs directly; use loss() or encode=True.',
+                    UserWarning,
+                    stacklevel=2,
+                )
+        loss = PhotonLoss(
+            inputs=inputs,
+            nmode=self.nmode,
+            wires=wires,
+            cutoff=self.cutoff,
+            convention='t',
+            requires_grad=requires_grad,
+        )
         self.add(loss, encode=encode)
 
     def loss_db(self, wires: int, inputs: Any = None, encode: bool = False) -> None:
@@ -2837,11 +2847,20 @@ class QumodeCircuit(Operation):
         requires_grad = not encode
         if inputs is not None:
             requires_grad = False
-            if not isinstance(inputs, torch.Tensor):
-                inputs = torch.tensor(inputs, dtype=torch.float)
-            t = 10 ** (-inputs / 10)
-            theta = torch.arccos(t**0.5) * 2
-        loss = PhotonLoss(inputs=theta, nmode=self.nmode, wires=wires, cutoff=self.cutoff, requires_grad=requires_grad)
+            if isinstance(inputs, torch.Tensor) and inputs.requires_grad and inputs.is_leaf:
+                warnings.warn(
+                    'loss_db() does not optimize leaf dB inputs directly; use loss() or encode=True.',
+                    UserWarning,
+                    stacklevel=2,
+                )
+        loss = PhotonLoss(
+            inputs=inputs,
+            nmode=self.nmode,
+            wires=wires,
+            cutoff=self.cutoff,
+            convention='db',
+            requires_grad=requires_grad,
+        )
         self.add(loss, encode=encode)
 
     def barrier(self, wires: int | list[int] | None = None) -> None:
