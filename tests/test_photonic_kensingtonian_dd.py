@@ -1,6 +1,6 @@
 """DD numerical regression tests, with the same kernel exercised on host and CUDA.
 
-The host harness is only a test adapter, not a supported CPU backend. It executes
+The independent host harness is a test adapter alongside the public CPU backend. It executes
 our packaged CUDA kernel with one synthetic thread at a time. CUDA cases test the
 public API and NVRTC/stream integration, and skip only when CUDA is unavailable.
 """
@@ -102,15 +102,15 @@ extern "C" void host_batch(const double* matrices, const int* clicks, int modes,
     return calculate
 
 
-@pytest.fixture(params=['host', 'cuda'])
+@pytest.fixture(params=['host', 'cpu', 'cuda'])
 def evaluate(request):
     if request.param == 'host':
         return request.getfixturevalue('host_kernel')
-    if not torch.cuda.is_available():
+    if request.param == 'cuda' and not torch.cuda.is_available():
         pytest.skip('NVIDIA CUDA is not available')
 
     def calculate(matrix, clicks, detectors):
-        return kensingtonian(matrix.cuda(), clicks, detectors, precision='double_double').cpu()
+        return kensingtonian(matrix.to(request.param), clicks, detectors, precision='double_double').cpu()
 
     return calculate
 
@@ -189,8 +189,8 @@ def test_unsupported_options_without_cuda(options, error, match):
 
 
 def test_device_dtype_and_grad_contract():
-    with pytest.raises(ValueError, match='CUDA tensor'):
-        kensingtonian(torch.eye(2, dtype=torch.double), [1], 4, precision='double_double')
+    with pytest.raises(ValueError, match='CPU and CUDA'):
+        kensingtonian(torch.eye(2, dtype=torch.double, device='meta'), [1], 4, precision='double_double')
     with pytest.raises(TypeError, match='float64'):
         kensingtonian(torch.eye(2), [1], 4, precision='double_double')
     with pytest.raises(NotImplementedError, match='autograd'):
@@ -215,10 +215,10 @@ def test_bad_numerical_results_raise(value, terms):
         _check_result(torch.tensor([value], dtype=torch.double), torch.tensor([terms], dtype=torch.double), 1, 1e-6)
 
 
-@_CUDA
-def test_cuda_zero_modes_empty_batch_and_reduction():
+@pytest.mark.parametrize('device', ['cpu', pytest.param('cuda', marks=_CUDA)])
+def test_device_zero_modes_empty_batch_and_reduction(device):
     options = {'precision': 'double_double'}
-    matrix = torch.eye(6, dtype=torch.double, device='cuda') * 0.01
+    matrix = torch.eye(6, dtype=torch.double, device=device) * 0.01
     assert kensingtonian(matrix, [0, 0, 0], 4, **options).item() == 1
     assert kensingtonian(matrix.new_empty(0, 6, 6), [1, 1, 1], 4, **options).shape == (0,)
     assert kensingtonian(matrix.new_empty(0, 0), [], 4, **options).item() == 1
@@ -232,7 +232,7 @@ def test_cuda_zero_modes_empty_batch_and_reduction():
     assert torch.equal(values[1:], values.new_zeros(2))
 
 
-@_CUDA
+@pytest.mark.parametrize('device', ['cpu', pytest.param('cuda', marks=_CUDA)])
 @pytest.mark.parametrize(
     'clicks,detectors,error',
     [
@@ -244,18 +244,18 @@ def test_cuda_zero_modes_empty_batch_and_reduction():
         ([4], 100000, ValueError),
     ],
 )
-def test_cuda_click_validation(clicks, detectors, error):
+def test_device_click_validation(device, clicks, detectors, error):
     with pytest.raises(error):
         kensingtonian(
-            torch.eye(2, dtype=torch.double, device='cuda') * 0.1, clicks, detectors, precision='double_double'
+            torch.eye(2, dtype=torch.double, device=device) * 0.1, clicks, detectors, precision='double_double'
         )
 
 
-@_CUDA
+@pytest.mark.parametrize('device', ['cpu', pytest.param('cuda', marks=_CUDA)])
 @pytest.mark.parametrize('matrix', [[[float('nan'), 0], [0, 0]], [[2, 0], [0, 2]], [[0.1, 0.1], [0, 0.1]]])
-def test_cuda_invalid_matrix(matrix):
+def test_device_invalid_matrix(device, matrix):
     with pytest.raises(ValueError):
-        kensingtonian(torch.tensor(matrix, dtype=torch.double, device='cuda'), [1], 4, precision='double_double')
+        kensingtonian(torch.tensor(matrix, dtype=torch.double, device=device), [1], 4, precision='double_double')
 
 
 @_CUDA
@@ -309,3 +309,45 @@ def test_cancellation_diagnostic_is_conservative(host_kernel):
     assert raw == pytest.approx(expected, rel=1e-8, abs=0)
     with pytest.raises(ArithmeticError, match='cancellation'):
         host_kernel(matrix, [1, 1, 1, 1], 4)
+
+
+def test_cpu_public_inference_and_cancellation():
+    matrix = (torch.eye(2, dtype=torch.double) * 1e-4).requires_grad_()
+    with torch.no_grad():
+        value = kensingtonian(matrix, [4], 4, precision='double_double')
+    assert value.device.type == 'cpu'
+    assert value.dtype == torch.float64
+    assert not value.requires_grad
+    assert value.item() == pytest.approx(float(thermal_reference(1e-4, 4, 4)), rel=1e-9, abs=0)
+    with pytest.raises(ArithmeticError, match='cancellation'):
+        kensingtonian(matrix.detach() * 1e-3, [4], 4, precision='double_double')
+
+
+def test_cpu_missing_compiler_is_actionable(monkeypatch):
+    from deepquantum.photonic._kensingtonian_cpu import _Kernel
+
+    monkeypatch.delenv('CXX', raising=False)
+    monkeypatch.setattr(shutil, 'which', lambda name: None)
+    with pytest.raises(RuntimeError, match=r'C\+\+17 compiler'):
+        _Kernel()
+
+
+@_CUDA
+def test_cpu_cuda_agree():
+    case = _REFERENCE[0]
+    matrix = torch.tensor(case['matrix'], dtype=torch.double)
+    cpu = kensingtonian(matrix, case['clicks'], 4, precision='double_double')
+    gpu = kensingtonian(matrix.cuda(), case['clicks'], 4, precision='double_double')
+    torch.testing.assert_close(cpu, gpu.cpu(), rtol=1e-10, atol=0)
+
+
+def test_cpu_does_not_initialize_cuda(monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError('CPU computation must not touch CUDA')
+
+    monkeypatch.setattr(torch.cuda, 'init', forbidden)
+    monkeypatch.setattr(torch.cuda, 'device', forbidden)
+    monkeypatch.setattr(torch.cuda, 'is_current_stream_capturing', forbidden)
+    matrix = torch.eye(2, dtype=torch.double) * 0.01
+    value = kensingtonian(matrix, [2], 4, precision='double_double')
+    assert value.item() == pytest.approx(float(thermal_reference(0.01, 2, 4)), rel=1e-10, abs=0)

@@ -232,8 +232,8 @@ def kensingtonian(
             the real displacement vector in the dimensionless quadrature representation. Default: ``None``
         chunk_size: The number of ``d`` vectors evaluated per chunk. Default: ``None``
         precision: ``'standard'`` uses the differentiable PyTorch implementation. ``'double_double'``
-            uses an optional Linux CUDA kernel with two float64 components per intermediate value.
-            It requires float64 CUDA input, no displacement, at most four total clicks, and no
+            selects a CPU or CUDA kernel from the input device, using two float64 components per value.
+            It requires float64 input, no displacement, at most four total clicks, and no
             ``chunk_size``. Integer coefficients must be exactly representable in float64.
             Autograd and CUDA graph capture are unsupported. Default: ``'standard'``
         dd_rtol: Positive relative cancellation threshold for ``'double_double'``. This heuristic
@@ -248,10 +248,13 @@ def kensingtonian(
         ``O`` and positive definite ``I - O``. Very small probabilities or ill-conditioned
         determinants can still require higher precision. The output remains float64.
 
-        The optional backend compiles lazily with NVIDIA NVRTC (no nvcc or host C++ compiler
-        required) and runs on the input device's current PyTorch stream. NVRTC and a compatible
-        NVIDIA driver must be installed. Compilation is cached per process/device; validation
-        synchronizes the stream. The standard path needs no CUDA compiler/runtime libraries.
+        The CPU backend supports macOS/Linux and compiles lazily with a C++17 compiler
+        (clang++/g++, or ``CXX``). The CUDA backend supports Linux and compiles with NVIDIA
+        NVRTC, with no host C++ compiler or nvcc required. It uses the input device's current
+        PyTorch stream; validation synchronizes the stream. Both backends reuse the same DD
+        core and cache compilation per process (and device for CUDA). Outputs stay on the
+        input device. MPS, autograd and CUDA graph capture are unsupported. The standard
+        path requires neither compiler.
 
     Examples:
         >>> matrix = torch.eye(2, dtype=torch.float64, device='cuda') * 1e-4  # doctest: +SKIP

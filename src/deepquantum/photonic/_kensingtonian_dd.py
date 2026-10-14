@@ -1,5 +1,6 @@
 """Validated input domain and cancellation diagnostics for DD Kensingtonians."""
 
+from contextlib import nullcontext
 from math import comb, isfinite, prod
 from numbers import Integral
 
@@ -32,7 +33,7 @@ def kensingtonian_dd(
     chunk_size: int | None,
     rtol: float,
 ) -> torch.Tensor:
-    """Evaluate the bounded, undisplaced CUDA DD backend with explicit validation."""
+    """Evaluate the bounded, undisplaced CPU/CUDA DD backend with explicit validation."""
     if matrix.dtype != torch.float64:
         raise TypeError('double_double requires a real torch.float64 input matrix')
     if matrix.ndim not in (2, 3) or matrix.shape[-2] != matrix.shape[-1] or matrix.shape[-1] % 2:
@@ -51,10 +52,11 @@ def kensingtonian_dd(
         raise ValueError('num_detectors must be a positive 32-bit integer')
     if not isfinite(rtol) or rtol <= 0:
         raise ValueError('dd_rtol must be finite and positive')
-    if matrix.device.type != 'cuda':
-        raise ValueError('double_double requires a CUDA tensor (Linux NVIDIA backend)')
-    with torch.cuda.device(matrix.device):
-        if torch.cuda.is_current_stream_capturing():
+    if matrix.device.type not in ('cpu', 'cuda'):
+        raise ValueError('double_double supports CPU and CUDA tensors only')
+    context = torch.cuda.device(matrix.device) if matrix.is_cuda else nullcontext()
+    with context:
+        if matrix.is_cuda and torch.cuda.is_current_stream_capturing():
             raise NotImplementedError('double_double validation does not support CUDA graph capture')
         nmode = matrix.shape[-1] // 2
         counts = torch.as_tensor(clicks).detach().cpu().reshape(-1)
@@ -95,7 +97,10 @@ def kensingtonian_dd(
             result = matrices.new_zeros(matrices.shape[0])
             nonzero = ~exact_zero
             if nonzero.any().item():
-                from ._kensingtonian_nvrtc import launch
+                if matrix.is_cuda:
+                    from ._kensingtonian_nvrtc import launch
+                else:
+                    from ._kensingtonian_cpu import launch
 
                 device_clicks = torch.tensor(reduced, dtype=torch.int32, device=matrix.device)
                 values, sum_abs = launch(matrices[nonzero].contiguous(), device_clicks, int(num_detectors))

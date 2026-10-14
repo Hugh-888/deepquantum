@@ -6,7 +6,8 @@ Enable the optional backend explicitly:
 import torch
 from deepquantum.photonic import kensingtonian
 
-matrix = torch.eye(2, dtype=torch.float64, device='cuda') * 1e-4
+device = 'cpu'  # use 'cuda' or 'cuda:3' for an NVIDIA GPU
+matrix = torch.eye(2, dtype=torch.float64, device=device) * 1e-4
 value = kensingtonian(matrix, [4], 4, precision='double_double')
 ```
 
@@ -14,13 +15,20 @@ The default `precision='standard'` retains the existing PyTorch implementation.
 `QumodeCircuit` continues to use that default; this change exposes the DD backend
 through the `kensingtonian` function, without switching circuit calculations automatically.
 
-The optional backend requires Linux, an NVIDIA CUDA-enabled PyTorch installation,
-and NVIDIA NVRTC (normally included in the CUDA runtime dependencies of PyTorch).
-NVRTC compiles the packaged source once per process/device. No nvcc, host C++
-compiler, mpmath, or CuPy is needed at runtime. Computation uses the input device
-and its current PyTorch stream; input and result validation synchronizes that stream.
-The first call includes compilation overhead. This implementation has not been
-designed for CUDA graph capture or differentiable execution.
+The backend follows `matrix.device` automatically and returns results on that device:
+
+- CPU: macOS/Linux, with a C++17 compiler (`clang++` or `g++`, or set `CXX`). The
+  shared DD core compiles on first use into a private temporary directory and is
+  cached for the process lifetime. The CPU batch loop runs serially in compiled
+  C++; it does not initialize CUDA or need any CUDA libraries.
+- CUDA: Linux, NVIDIA CUDA-enabled PyTorch, and NVIDIA NVRTC (normally included
+  in the CUDA runtime dependencies of PyTorch). No nvcc or host C++ compiler is
+  needed. Compilation is cached per process/device. Computation uses that device's
+  current PyTorch stream; input/result validation synchronizes the stream.
+
+Both paths use the same DD arithmetic and determinant core. Neither path requires
+mpmath or CuPy. The first call includes compilation overhead. MPS, Windows,
+CUDA graph capture and differentiable execution are currently unsupported.
 
 Supported inputs are real `torch.float64` matrices in `xxpp` order, a shared click
 pattern across a batch, no displacement (`gamma=None`), and at most four total
@@ -67,13 +75,14 @@ extreme cancellation. It uses relative error with zero absolute tolerance for
 small nonzero reference values.
 
 The host cross-check compiles the **same packaged kernel source** with a synthetic
-thread adapter using clang++ or g++. It is a test harness, not a public CPU DD
-backend. CUDA tests additionally exercise NVRTC, the public API, non-default
-streams, input-device selection, zero-click reduction, vacuum and empty inputs.
+thread adapter using clang++ or g++. Numerical cases also run through the public
+CPU API. Both device backends test input validation, zero-click reduction, vacuum
+and empty inputs. CUDA tests additionally exercise NVRTC, non-default streams,
+input-device selection and agreement with the public CPU backend.
 Host checks cannot replace those CUDA integration tests. CUDA tests skip only
 when CUDA is unavailable (the multi-device test additionally needs two GPUs).
 
-Local validation on 2026-10-14: 62 passed and 51 skipped across the two modules on
+Local validation on 2026-10-14: 114 passed and 52 skipped across the two modules on
 a CPU-only macOS Python/PyTorch environment; CUDA and MPS execution was unavailable.
 An additional host cross-check of 13,326 previously saved physical input matrices
 against independent 80-digit references had maximum relative error 1.94e-12,
