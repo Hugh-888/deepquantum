@@ -1,5 +1,6 @@
 import networkx as nx
 import numpy as np
+import pytest
 import torch
 from scipy.stats import unitary_group
 
@@ -75,3 +76,52 @@ def test_williamson():
     omega = omega.reshape(2, nmode, 2 * nmode).flip(0).reshape(2 * nmode, 2 * nmode)  # symplectic form
     err2 = abs((s.mT @ omega @ s) - omega).sum()  # 验证辛形式
     assert err1 + err2 < 5e-4
+
+
+@pytest.mark.parametrize('minimum', [0.0, -1e-10, 1e-14])
+def test_williamson_eigenvalue_floor(minimum):
+    cov = torch.diag(torch.tensor([minimum, 2.0], dtype=torch.float64))
+    if minimum <= 0:
+        with pytest.raises(AssertionError, match='positive definite'):
+            dqp.williamson(cov)
+    else:
+        diag, symplectic = dqp.williamson(cov)
+        torch.testing.assert_close(symplectic @ diag @ symplectic.mT, cov, atol=1e-16, rtol=1e-10)
+    diag, symplectic = dqp.williamson(
+        cov, positive_definite_tol=1e-8, eigenvalue_floor=1e-12, schur_atol=1e-4
+    )
+    expected = torch.diag(cov.diag().clamp_min(1e-12))
+    torch.testing.assert_close(symplectic @ diag @ symplectic.mT, expected, atol=1e-16, rtol=1e-10)
+    omega = cov.new_tensor([[0, 1], [-1, 0]])
+    torch.testing.assert_close(symplectic @ omega @ symplectic.mT, omega)
+
+
+def test_williamson_rejects_indefinite_covariance():
+    cov = torch.diag(torch.tensor([-1e-8, 1.0], dtype=torch.float64))
+    with pytest.raises(AssertionError, match='positive definite'):
+        dqp.williamson(cov, positive_definite_tol=1e-8, eigenvalue_floor=1e-12)
+
+
+@pytest.mark.parametrize(
+    'kwargs',
+    [
+        {'positive_definite_tol': -1e-8},
+        {'positive_definite_tol': float('nan')},
+        {'positive_definite_tol': 1e-8},
+        {'eigenvalue_floor': 0.0},
+        {'eigenvalue_floor': float('inf')},
+        {'schur_atol': -1e-5},
+    ],
+)
+def test_williamson_invalid_tolerances(kwargs):
+    with pytest.raises(ValueError):
+        dqp.williamson(torch.eye(2), **kwargs)
+
+
+def test_schur_anti_symm_even_atol():
+    mat = torch.tensor([[2e-5, 1.0], [-1.0, 0.0]], dtype=torch.float64)
+    with pytest.raises(AssertionError):
+        dqp.schur_anti_symm_even(mat)
+    triangular, orthogonal = dqp.schur_anti_symm_even(mat, atol=1e-4)
+    assert torch.isfinite(triangular).all()
+    assert torch.isfinite(orthogonal).all()

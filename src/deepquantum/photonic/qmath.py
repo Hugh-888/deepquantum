@@ -403,20 +403,36 @@ def takagi(a: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
                     return v, diag
 
 
-def sqrtm_herm(mat: torch.Tensor) -> torch.Tensor:
-    """Compute the positive matrix square root of a Hermitian matrix using eigenvalue decomposition."""
+def sqrtm_herm(mat: torch.Tensor, *, eigenvalue_floor: float | None = None) -> torch.Tensor:
+    """Compute the positive matrix square root of a Hermitian matrix using eigenvalue decomposition.
+
+    Args:
+        mat: The Hermitian matrix.
+        eigenvalue_floor: Optional positive lower bound applied to eigenvalues before taking their square roots.
+            Default: ``None`` (no clipping).
+    """
+    if eigenvalue_floor is not None and not 0 < eigenvalue_floor < float('inf'):
+        raise ValueError('eigenvalue_floor must be finite and positive.')
     lambd, mat_q = torch.linalg.eigh(mat)
+    if eigenvalue_floor is not None:
+        lambd = lambd.clamp_min(eigenvalue_floor)
     return mat_q @ lambd.sqrt().diag_embed().to(mat_q.dtype) @ mat_q.mH
 
 
-def schur_anti_symm_even(mat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def schur_anti_symm_even(mat: torch.Tensor, *, atol: float = 1e-5) -> tuple[torch.Tensor, torch.Tensor]:
     r"""Schur decomposition for a real antisymmetric and even-dimensional matrix.
 
     This function decomposes a real antisymmetric matrix :math:`A` into the form :math:`A = O T O^T`,
     where :math:`O` is an orthogonal matrix and :math:`T` is a block-diagonal matrix
     with :math:`2 \times 2` antisymmetric blocks.
+
+    Args:
+        mat: The real antisymmetric matrix.
+        atol: Absolute tolerance for the antisymmetry check. Default: ``1e-5``.
     """
-    assert torch.allclose(mat, -mat.mT, rtol=1e-5, atol=1e-5)
+    if not 0 <= atol < float('inf'):
+        raise ValueError('atol must be finite and nonnegative.')
+    assert torch.allclose(mat, -mat.mT, rtol=1e-5, atol=atol)
     n = len(mat)
     hermitian = mat * -1j
     lambd, u = torch.linalg.eigh(hermitian)
@@ -434,7 +450,13 @@ def schur_anti_symm_even(mat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]
     return mat_t, mat_o
 
 
-def williamson(cov: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def williamson(
+    cov: torch.Tensor,
+    *,
+    positive_definite_tol: float = 0.0,
+    eigenvalue_floor: float | None = None,
+    schur_atol: float = 1e-5,
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Williamson decomposition.
 
     This function decomposes a real symmetric and even-dimensional positive definite matrix :math:`V`
@@ -442,18 +464,31 @@ def williamson(cov: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     :math:`D` is a diagonal matrix with the symplectic eigenvalues.
 
     See https://arxiv.org/pdf/2403.04596 Section VII.
+
+    Args:
+        cov: The covariance matrix in ``xxpp`` ordering.
+        positive_definite_tol: Accept eigenvalues strictly greater than the negative of this tolerance.
+            A positive tolerance requires ``eigenvalue_floor``. Default: ``0.0`` (strictly positive definite).
+        eigenvalue_floor: Optional positive eigenvalue floor used when constructing the matrix square root.
+            The returned factors reconstruct the clipped covariance, which can differ from ``cov``.
+            Default: ``None`` (no clipping).
+        schur_atol: Absolute tolerance for the intermediate antisymmetry check. Default: ``1e-5``.
     """
+    if not 0 <= positive_definite_tol < float('inf'):
+        raise ValueError('positive_definite_tol must be finite and nonnegative.')
+    if positive_definite_tol > 0 and eigenvalue_floor is None:
+        raise ValueError('A positive positive_definite_tol requires eigenvalue_floor.')
     assert torch.allclose(cov, cov.mT, rtol=1e-5, atol=1e-5)
     nmode = cov.shape[-1] // 2
     omega = cov.new_ones(nmode)
     omega = torch.cat([-omega, omega]).diag_embed()
     omega = omega.reshape(2, nmode, 2 * nmode).flip(0).reshape(2 * nmode, 2 * nmode)  # symplectic form
     vals = torch.linalg.eigvalsh(cov)
-    assert torch.all(vals > 0), 'Matrix must be positive definite.'
-    cov_sqrt = sqrtm_herm(cov)
+    assert torch.all(vals > -positive_definite_tol), 'Matrix must be positive definite.'
+    cov_sqrt = sqrtm_herm(cov, eigenvalue_floor=eigenvalue_floor)
     cov_sqrt_inv = cov_sqrt.inverse()
     psi = cov_sqrt_inv @ omega @ cov_sqrt_inv  # antisymmetric
-    mat_t, o_tilde = schur_anti_symm_even(psi)
+    mat_t, o_tilde = schur_anti_symm_even(psi, atol=schur_atol)
     idx_perm = torch.arange(2 * nmode, device=cov.device).reshape(nmode, 2).T.flatten()
     mat_t_xxpp = mat_t[:, idx_perm][idx_perm]
     mat_o = o_tilde[:, idx_perm]
