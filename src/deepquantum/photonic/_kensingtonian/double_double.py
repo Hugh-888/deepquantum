@@ -98,9 +98,9 @@ def kensingtonian_dd(
             nonzero = ~exact_zero
             if nonzero.any().item():
                 if matrix.is_cuda:
-                    from ._kensingtonian_nvrtc import launch
+                    from .cuda import launch
                 else:
-                    from ._kensingtonian_cpu import launch
+                    from .cpu import launch
 
                 device_clicks = torch.tensor(reduced, dtype=torch.int32, device=matrix.device)
                 values, sum_abs = launch(matrices[nonzero].contiguous(), device_clicks, int(num_detectors))

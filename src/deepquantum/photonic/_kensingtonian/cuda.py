@@ -10,7 +10,7 @@ from threading import Lock
 
 import torch
 
-_SOURCE_DIR = Path(__file__).with_name('_kensingtonian_cuda')
+_SOURCE_DIR = Path(__file__).with_name('native')
 _COMPILE_LOCK = Lock()
 
 

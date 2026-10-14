@@ -1,2 +1,1 @@
 include tests/data/kensingtonian_dd_reference.json
-include tests/README_kensingtonian_dd.md

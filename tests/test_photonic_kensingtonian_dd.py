@@ -18,8 +18,8 @@ import pytest
 import torch
 
 from deepquantum.photonic import kensingtonian
-from deepquantum.photonic._kensingtonian_dd import _check_result
-from deepquantum.photonic._kensingtonian_nvrtc import _SOURCE_DIR
+from deepquantum.photonic._kensingtonian.cuda import _SOURCE_DIR
+from deepquantum.photonic._kensingtonian.double_double import _check_result
 
 _REFERENCE = json.loads((Path(__file__).parent / 'data/kensingtonian_dd_reference.json').read_text())['cases']
 _CUDA = pytest.mark.skipif(not torch.cuda.is_available(), reason='NVIDIA CUDA is not available')
@@ -324,7 +324,7 @@ def test_cpu_public_inference_and_cancellation():
 
 
 def test_cpu_missing_compiler_is_actionable(monkeypatch):
-    from deepquantum.photonic._kensingtonian_cpu import _Kernel
+    from deepquantum.photonic._kensingtonian.cpu import _Kernel
 
     monkeypatch.delenv('CXX', raising=False)
     monkeypatch.setattr(shutil, 'which', lambda name: None)

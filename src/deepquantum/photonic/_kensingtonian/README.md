@@ -1,4 +1,39 @@
-# Double-double Kensingtonian
+# Kensingtonian
+
+All implementations live in this private package. The supported public import is
+`from deepquantum.photonic import kensingtonian`. The existing
+`deepquantum.photonic.kensingtonian_` module remains a compatibility entry point.
+
+## File layout
+
+```text
+_kensingtonian/
+├── __init__.py              # Function export
+├── api.py                   # Public signature and standard PyTorch implementation
+├── double_double.py         # DD validation, device dispatch and cancellation checks
+├── cpu.py                   # Lazy host compilation and CPU batch execution
+├── cuda.py                  # NVRTC compilation and CUDA stream launch
+├── README.md
+└── native/
+    ├── dd.cuh               # Shared double-double arithmetic primitives
+    ├── kensingtonian_dd.cuh # Shared determinant and finite-sum implementation
+    ├── kensingtonian_dd_cpu.cpp # CPU batch entry point
+    ├── kensingtonian_dd.cu  # CUDA parallel entry point
+    ├── LICENSE              # GBSKernels Apache-2.0 license
+    └── NOTICE               # Upstream source and modifications
+```
+
+`native/` contains both CPU and CUDA sources. The two entry points reuse the same
+headers. Keep the third-party license and provenance next to those sources;
+compilation and packaging require the native files to remain separate.
+
+The Python backends locate `native/` relative to their installed module. Package
+data includes this README, all native sources, and LICENSE/NOTICE in both wheel
+and source distributions. Compilation writes temporary files, not package files.
+Tests remain in `tests/test_photonic_kensingtonian*.py`; frozen reference data
+remains in `tests/data/kensingtonian_dd_reference.json`.
+
+## Usage and requirements
 
 Enable the optional backend explicitly:
 

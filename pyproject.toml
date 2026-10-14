@@ -77,7 +77,8 @@ Issues = 'https://github.com/TuringQ/deepquantum/issues'
 version = { attr = 'deepquantum.__version__' }
 
 [tool.setuptools.package-data]
-'deepquantum.photonic' = ['cache/*', '_kensingtonian_cuda/*']
+'deepquantum.photonic' = ['cache/*']
+'deepquantum.photonic._kensingtonian' = ['README.md', 'native/*']
 
 [tool.jupytext]
 formats = 'ipynb,py:percent'
