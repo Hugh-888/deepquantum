@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from math import prod
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import torch
 
@@ -216,6 +216,9 @@ def kensingtonian(
     num_detectors: int,
     gamma: torch.Tensor | None = None,
     chunk_size: int | None = None,
+    *,
+    precision: Literal['standard', 'double_double'] = 'standard',
+    dd_rtol: float = 1e-6,
 ) -> torch.Tensor:
     r"""Calculate a single or batch Kensingtonian or loop Kensingtonian.
 
@@ -228,10 +231,38 @@ def kensingtonian(
         gamma: The precontracted loop vector :math:`\gamma=\alpha^T\Sigma^{-1}`, where :math:`\alpha` is
             the real displacement vector in the dimensionless quadrature representation. Default: ``None``
         chunk_size: The number of ``d`` vectors evaluated per chunk. Default: ``None``
+        precision: ``'standard'`` uses the differentiable PyTorch implementation. ``'double_double'``
+            uses an optional Linux CUDA kernel with two float64 components per intermediate value.
+            It requires float64 CUDA input, no displacement, at most four total clicks, and no
+            ``chunk_size``. Integer coefficients must be exactly representable in float64.
+            Autograd and CUDA graph capture are unsupported. Default: ``'standard'``
+        dd_rtol: Positive relative cancellation threshold for ``'double_double'``. This heuristic
+            is not a certified error bound. Detected severe cancellation raises ``ArithmeticError``;
+            there is no automatic high-precision CPU fallback. Ignored by ``'standard'``.
+            Default: ``1e-6``
 
     Note:
         Use ``float64`` inputs for high click counts or other cancellation-sensitive cases.
+        Double-double improves arithmetic on the supplied matrix; it cannot recover accuracy
+        lost while constructing that matrix. It assumes physical Gaussian inputs with symmetric
+        ``O`` and positive definite ``I - O``. Very small probabilities or ill-conditioned
+        determinants can still require higher precision. The output remains float64.
+
+        The optional backend compiles lazily with NVIDIA NVRTC (no nvcc or host C++ compiler
+        required) and runs on the input device's current PyTorch stream. NVRTC and a compatible
+        NVIDIA driver must be installed. Compilation is cached per process/device; validation
+        synchronizes the stream. The standard path needs no CUDA compiler/runtime libraries.
+
+    Examples:
+        >>> matrix = torch.eye(2, dtype=torch.float64, device='cuda') * 1e-4  # doctest: +SKIP
+        >>> value = kensingtonian(matrix, [4], 4, precision='double_double')  # doctest: +SKIP
     """
+    if precision == 'double_double':
+        from ._kensingtonian_dd import kensingtonian_dd
+
+        return kensingtonian_dd(matrix, clicks, num_detectors, gamma, chunk_size, dd_rtol)
+    if precision != 'standard':
+        raise ValueError("precision must be 'standard' or 'double_double'")
     nmode = _check_matrix(matrix)
     is_single = matrix.ndim == 2
     if is_single:

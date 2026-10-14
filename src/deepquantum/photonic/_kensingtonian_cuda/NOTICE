@@ -1,0 +1,6 @@
+Double-double arithmetic in dd.cuh is adapted from GBSKernels:
+https://github.com/chaofanzhougit/GBSKernels
+commit 1aaed3b6b0260947ce9aecf0af69f60c3ff09039, core/dd.cuh
+Licensed under Apache-2.0 (see LICENSE).
+DeepQuantum changes: conditional host math include; removed cuda_runtime.h dependency.
+The Kensingtonian core and CUDA adapter are DeepQuantum additions.
